@@ -14,17 +14,19 @@ import androidx.compose.ui.unit.dp
 
 @Composable
 fun CountdownCircle(progress: Float, timeLabel: String) {
+    val primary = MaterialTheme.colorScheme.primary
+    val track = primary.copy(alpha = 0.2f)
     Box(contentAlignment = Alignment.Center, modifier = Modifier.size(240.dp)) {
         Canvas(modifier = Modifier.size(240.dp)) {
             drawArc(
-                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f),
+                color = track,
                 startAngle = -90f,
                 sweepAngle = 360f,
                 useCenter = false,
                 style = Stroke(width = 18f, cap = StrokeCap.Round)
             )
             drawArc(
-                color = MaterialTheme.colorScheme.primary,
+                color = primary,
                 startAngle = -90f,
                 sweepAngle = 360f * progress,
                 useCenter = false,
