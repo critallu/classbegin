@@ -58,10 +58,7 @@ class CountdownViewModel(private val reminderRepository: ReminderRepository) : V
                 current.rules.forEach { rule ->
                     if (!remindedIds.contains(rule.id) && elapsedSec >= rule.triggerAfterMinutes * 60) {
                         remindedIds.add(rule.id)
-                        next = next.copy(
-                            tip = rule.label,
-                            vibrateSignal = current.vibrateSignal + 1
-                        )
+                        next = next.copy(tip = rule.label, vibrateSignal = current.vibrateSignal + 1)
                     }
                 }
 
@@ -86,7 +83,9 @@ class CountdownViewModel(private val reminderRepository: ReminderRepository) : V
             context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
         }
         if (!vibrator.hasVibrator()) return
-        val effect = VibrationEffect.createWaveform(longArrayOf(0, 220, 120, 320), -1)
+
+        // long vibration, 3 times: vibrate 700ms + pause 250ms, repeat 3 pulses
+        val effect = VibrationEffect.createWaveform(longArrayOf(0, 700, 250, 700, 250, 700), -1)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             val attrs = VibrationAttributes.createForUsage(VibrationAttributes.USAGE_ALARM)
             vibrator.vibrate(effect, attrs)
