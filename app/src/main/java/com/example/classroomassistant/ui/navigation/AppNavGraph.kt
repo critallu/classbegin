@@ -59,16 +59,22 @@ fun AppNavGraph(container: AppContainer) {
                 HomeScreen(homeVm, onGoCountdown = { nav.navigate(NavRoute.Countdown.route) }, onCourseClick = { nav.navigate("course_detail/$it") })
             }
             composable(NavRoute.Schedule.route) {
-                ScheduleScreen(scheduleVm, onAdd = { nav.navigate(NavRoute.CourseEdit.route) }, onDetail = { nav.navigate("course_detail/$it") })
+                ScheduleScreen(scheduleVm, onAdd = { nav.navigate("course_edit/0") }, onDetail = { nav.navigate("course_detail/$it") })
             }
             composable(NavRoute.Countdown.route) {
                 val first = remember(scheduleVm.courses.value) { scheduleVm.courses.value.firstOrNull() }
                 if (first != null && countdownVm.uiState.value.course == null) countdownVm.start(first)
                 CountdownScreen(countdownVm) { nav.navigate(NavRoute.Home.route) }
             }
-            composable(NavRoute.Calendar.route) { CalendarScreen(calendarVm, onAdd = { nav.navigate(NavRoute.EventEdit.route) }) }
+            composable(NavRoute.Calendar.route) {
+                CalendarScreen(calendarVm, onAdd = { nav.navigate("event_edit/$it") })
+            }
             composable(NavRoute.Settings.route) { SettingsScreen(settingsVm) }
-            composable(NavRoute.CourseEdit.route) { CourseEditScreen(scheduleVm) { nav.popBackStack() } }
+            composable("course_edit/{id}", arguments = listOf(navArgument("id") { type = NavType.LongType })) { back ->
+                val id = back.arguments?.getLong("id") ?: 0L
+                val existing = scheduleVm.courses.value.firstOrNull { it.id == id }
+                CourseEditScreen(existing, scheduleVm) { nav.popBackStack() }
+            }
             composable("course_detail/{id}", arguments = listOf(navArgument("id") { type = NavType.LongType })) { back ->
                 val id = back.arguments?.getLong("id") ?: 0L
                 val course = scheduleVm.courses.value.firstOrNull { it.id == id }
@@ -76,10 +82,14 @@ fun AppNavGraph(container: AppContainer) {
                     course,
                     scheduleVm,
                     onStart = { course?.let { countdownVm.start(it) }; nav.navigate(NavRoute.Countdown.route) },
-                    onBack = { nav.popBackStack() }
+                    onBack = { nav.popBackStack() },
+                    onEditCourse = { nav.navigate("course_edit/$it") }
                 )
             }
-            composable(NavRoute.EventEdit.route) { EventEditScreen(calendarVm) { nav.popBackStack() } }
+            composable("event_edit/{date}", arguments = listOf(navArgument("date") { type = NavType.StringType })) { back ->
+                val date = back.arguments?.getString("date") ?: java.time.LocalDate.now().toString()
+                EventEditScreen(date, calendarVm) { nav.popBackStack() }
+            }
         }
     }
 }

@@ -10,41 +10,43 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.example.classroomassistant.data.entity.Course
 import com.example.classroomassistant.ui.components.PrimaryButton
 
 @Composable
-fun CourseEditScreen(vm: ScheduleViewModel, onDone: () -> Unit) {
-    val name = remember { mutableStateOf("") }
-    val weekday = remember { mutableIntStateOf(java.time.LocalDate.now().dayOfWeek.value) }
-    val startTime = remember { mutableStateOf("08:00") }
-    val duration = remember { mutableIntStateOf(40) }
-    val classroom = remember { mutableStateOf("") }
-    val className = remember { mutableStateOf("") }
-    val note = remember { mutableStateOf("") }
+fun CourseEditScreen(existing: Course?, vm: ScheduleViewModel, onDone: () -> Unit) {
+    var name by remember(existing?.id) { mutableStateOf(existing?.name ?: "") }
+    var weekday by remember(existing?.id) { mutableIntStateOf(existing?.weekday ?: java.time.LocalDate.now().dayOfWeek.value) }
+    var startTime by remember(existing?.id) { mutableStateOf(existing?.startTime ?: "08:00") }
+    var duration by remember(existing?.id) { mutableIntStateOf(existing?.durationMinutes ?: 40) }
+    var classroom by remember(existing?.id) { mutableStateOf(existing?.classroom ?: "") }
+    var className by remember(existing?.id) { mutableStateOf(existing?.className ?: "") }
+    var note by remember(existing?.id) { mutableStateOf(existing?.note ?: "") }
 
     Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text("新增课程")
-        OutlinedTextField(name.value, { name.value = it }, label = { Text("课程名称* ") })
-        OutlinedTextField(weekday.intValue.toString(), { weekday.intValue = it.toIntOrNull() ?: 1 }, label = { Text("星期(1-7)*") })
-        OutlinedTextField(startTime.value, { startTime.value = it }, label = { Text("开始时间* 例如 08:00") })
-        OutlinedTextField(duration.intValue.toString(), { duration.intValue = it.toIntOrNull() ?: 40 }, label = { Text("时长分钟* ") })
-        OutlinedTextField(classroom.value, { classroom.value = it }, label = { Text("教室") })
-        OutlinedTextField(className.value, { className.value = it }, label = { Text("班级") })
-        OutlinedTextField(note.value, { note.value = it }, label = { Text("备注") })
+        Text(if (existing == null) "新增课程" else "编辑课程")
+        OutlinedTextField(name, { name = it }, label = { Text("课程名称* ") })
+        OutlinedTextField(weekday.toString(), { weekday = it.toIntOrNull() ?: 1 }, label = { Text("星期(1-7)*") })
+        OutlinedTextField(startTime, { startTime = it }, label = { Text("开始时间* 例如 08:00") })
+        OutlinedTextField(duration.toString(), { duration = it.toIntOrNull() ?: 40 }, label = { Text("时长分钟* ") })
+        OutlinedTextField(classroom, { classroom = it }, label = { Text("教室") })
+        OutlinedTextField(className, { className = it }, label = { Text("班级") })
+        OutlinedTextField(note, { note = it }, label = { Text("备注") })
         PrimaryButton("保存") {
             vm.saveCourse(
                 Course(
-                    name = name.value,
-                    weekday = weekday.intValue,
-                    startTime = startTime.value,
-                    durationMinutes = duration.intValue,
-                    classroom = classroom.value,
-                    className = className.value,
-                    note = note.value,
-                    color = "#E8F0FA"
+                    id = existing?.id ?: 0,
+                    name = name,
+                    weekday = weekday,
+                    startTime = startTime,
+                    durationMinutes = duration,
+                    classroom = classroom,
+                    className = className,
+                    note = note,
+                    color = existing?.color ?: "#E8F0FA"
                 ),
                 onDone = onDone
             )

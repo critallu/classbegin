@@ -37,6 +37,17 @@ class ScheduleViewModel(
         }
     }
 
+    fun updateReminder(reminder: ReminderRule, label: String, afterMinutes: Int) {
+        if (label.isBlank() || afterMinutes <= 0) {
+            snackbar.value = "提醒内容和分钟数必须有效"
+            return
+        }
+        viewModelScope.launch {
+            reminderRepository.update(reminder.copy(label = label, triggerAfterMinutes = afterMinutes))
+            snackbar.value = "提醒已更新"
+        }
+    }
+
     fun deleteReminder(reminderId: Long) {
         viewModelScope.launch {
             reminderRepository.deleteById(reminderId)

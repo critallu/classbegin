@@ -6,7 +6,7 @@ sealed class NavRoute(val route: String) {
     data object Countdown : NavRoute("countdown")
     data object Calendar : NavRoute("calendar")
     data object Settings : NavRoute("settings")
-    data object CourseEdit : NavRoute("course_edit")
+    data object CourseEdit : NavRoute("course_edit/{id}")
     data object CourseDetail : NavRoute("course_detail/{id}")
-    data object EventEdit : NavRoute("event_edit")
+    data object EventEdit : NavRoute("event_edit/{date}")
 }

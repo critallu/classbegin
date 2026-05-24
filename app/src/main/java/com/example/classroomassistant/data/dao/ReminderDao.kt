@@ -4,6 +4,7 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Update
 import com.example.classroomassistant.data.entity.ReminderRule
 import kotlinx.coroutines.flow.Flow
 
@@ -17,6 +18,9 @@ interface ReminderDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAll(rules: List<ReminderRule>)
+
+    @Update
+    suspend fun update(rule: ReminderRule)
 
     @Query("DELETE FROM ReminderRule WHERE id = :id")
     suspend fun deleteById(id: Long)
