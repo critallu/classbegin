@@ -48,107 +48,55 @@ class ScheduleViewModel(
         .map { it ?: SemesterConfig() }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), SemesterConfig())
 
-    private val templates = courseRepository.courses
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-
-    private val weekOverrides = selectedWeek
-        .flatMapLatest { overrideRepository.observeByWeek(it) }
+    private val templates = courseRepository.courses.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    private val weekOverrides = selectedWeek.flatMapLatest { overrideRepository.observeByWeek(it) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val scheduledCourses: StateFlow<List<ScheduledCourse>> = combine(templates, weekOverrides) { base, overrides ->
         val overrideByBase = overrides.associateBy { it.baseCourseId }
         base.map { c ->
             val o = overrideByBase[c.id]
-            if (o != null) {
-                ScheduledCourse(c.id, o.id, o.name, o.weekday, o.startTime, o.durationMinutes, o.classroom, o.className, o.note, o.color)
-            } else {
-                ScheduledCourse(c.id, null, c.name, c.weekday, c.startTime, c.durationMinutes, c.classroom, c.className, c.note, c.color)
-            }
+            if (o != null) ScheduledCourse(c.id, o.id, o.name, o.weekday, o.startTime, o.durationMinutes, o.classroom, o.className, o.note, o.color)
+            else ScheduledCourse(c.id, null, c.name, c.weekday, c.startTime, c.durationMinutes, c.classroom, c.className, c.note, c.color)
         }.sortedWith(compareBy<ScheduledCourse> { it.weekday }.thenBy { it.startTime })
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     fun currentWeek(): StateFlow<Int> = selectedWeek
+    fun setWeek(week: Int) { selectedWeek.value = week.coerceIn(1, semester.value.totalWeeks.coerceAtLeast(1)) }
 
-    fun setWeek(week: Int) {
-        val total = semester.value.totalWeeks.coerceAtLeast(1)
-        selectedWeek.value = week.coerceIn(1, total)
-    }
-
-    fun saveSemester(totalWeeks: Int, currentWeek: Int, termStartDate: String) {
+    fun saveSemester(totalWeeks: Int, currentWeek: Int, termStartDate: String, periodsPerDay: Int, periodDurationMinutes: Int) {
         viewModelScope.launch {
-            val cfg = SemesterConfig(totalWeeks = totalWeeks.coerceAtLeast(1), currentWeek = currentWeek.coerceAtLeast(1), termStartDate = termStartDate)
+            val cfg = SemesterConfig(
+                totalWeeks = totalWeeks.coerceAtLeast(1),
+                currentWeek = currentWeek.coerceAtLeast(1),
+                termStartDate = termStartDate,
+                periodsPerDay = periodsPerDay.coerceIn(1, 16),
+                periodDurationMinutes = periodDurationMinutes.coerceIn(20, 120)
+            )
             semesterRepository.upsert(cfg)
             selectedWeek.value = cfg.currentWeek.coerceIn(1, cfg.totalWeeks)
             snackbar.value = "学期设置已保存"
         }
     }
 
-    fun observeReminders(courseId: Long): StateFlow<List<ReminderRule>> =
-        reminderRepository.observeByCourse(courseId).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-
-    fun addReminder(courseId: Long, label: String, afterMinutes: Int) {
-        if (label.isBlank() || afterMinutes <= 0) { snackbar.value = "提醒内容和分钟数必须有效"; return }
-        viewModelScope.launch {
-            reminderRepository.add(ReminderRule(courseId = courseId, triggerAfterMinutes = afterMinutes, label = label, enabled = true))
-            snackbar.value = "提醒已添加"
-        }
-    }
-
-    fun updateReminder(reminder: ReminderRule, label: String, afterMinutes: Int) {
-        if (label.isBlank() || afterMinutes <= 0) { snackbar.value = "提醒内容和分钟数必须有效"; return }
-        viewModelScope.launch {
-            reminderRepository.update(reminder.copy(label = label, triggerAfterMinutes = afterMinutes))
-            snackbar.value = "提醒已更新"
-        }
-    }
-
-    fun deleteReminder(reminderId: Long) {
-        viewModelScope.launch { reminderRepository.deleteById(reminderId); snackbar.value = "提醒已删除" }
-    }
+    fun observeReminders(courseId: Long): StateFlow<List<ReminderRule>> = reminderRepository.observeByCourse(courseId).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    fun addReminder(courseId: Long, label: String, afterMinutes: Int) { if (label.isBlank() || afterMinutes <= 0) { snackbar.value = "提醒内容和分钟数必须有效"; return }; viewModelScope.launch { reminderRepository.add(ReminderRule(courseId = courseId, triggerAfterMinutes = afterMinutes, label = label, enabled = true)); snackbar.value = "提醒已添加" } }
+    fun updateReminder(reminder: ReminderRule, label: String, afterMinutes: Int) { if (label.isBlank() || afterMinutes <= 0) { snackbar.value = "提醒内容和分钟数必须有效"; return }; viewModelScope.launch { reminderRepository.update(reminder.copy(label = label, triggerAfterMinutes = afterMinutes)); snackbar.value = "提醒已更新" } }
+    fun deleteReminder(reminderId: Long) { viewModelScope.launch { reminderRepository.deleteById(reminderId); snackbar.value = "提醒已删除" } }
 
     fun saveCourse(course: Course, onDone: () -> Unit) {
-        if (course.name.isBlank() || course.startTime.isBlank() || course.weekday !in 1..7 || course.durationMinutes <= 0) {
-            snackbar.value = "请完整填写必填项"; return
-        }
-        viewModelScope.launch {
-            if (course.id == 0L) courseRepository.add(course) else courseRepository.update(course)
-            snackbar.value = "保存成功"
-            onDone()
-        }
+        if (course.name.isBlank() || course.startTime.isBlank() || course.weekday !in 1..7 || course.durationMinutes <= 0) { snackbar.value = "请完整填写必填项"; return }
+        viewModelScope.launch { if (course.id == 0L) courseRepository.add(course) else courseRepository.update(course); snackbar.value = "保存成功"; onDone() }
     }
 
     fun updateScheduledCourse(edited: ScheduledCourse, scope: UpdateScope, onDone: () -> Unit) {
         viewModelScope.launch {
             if (scope == UpdateScope.ALL_WEEKS) {
-                courseRepository.update(
-                    Course(
-                        id = edited.baseCourseId,
-                        name = edited.name,
-                        weekday = edited.weekday,
-                        startTime = edited.startTime,
-                        durationMinutes = edited.durationMinutes,
-                        classroom = edited.classroom,
-                        className = edited.className,
-                        note = edited.note,
-                        color = edited.color
-                    )
-                )
+                courseRepository.update(Course(edited.baseCourseId, edited.name, edited.weekday, edited.startTime, edited.durationMinutes, edited.classroom, edited.className, edited.note, edited.color))
             } else {
                 val week = selectedWeek.value
                 val existing = overrideRepository.findByBaseAndWeek(edited.baseCourseId, week)
-                val override = CourseWeekOverride(
-                    id = existing?.id ?: 0,
-                    baseCourseId = edited.baseCourseId,
-                    weekIndex = week,
-                    name = edited.name,
-                    weekday = edited.weekday,
-                    startTime = edited.startTime,
-                    durationMinutes = edited.durationMinutes,
-                    classroom = edited.classroom,
-                    className = edited.className,
-                    note = edited.note,
-                    color = edited.color
-                )
+                val override = CourseWeekOverride(existing?.id ?: 0, edited.baseCourseId, week, edited.name, edited.weekday, edited.startTime, edited.durationMinutes, edited.classroom, edited.className, edited.note, edited.color)
                 if (existing == null) overrideRepository.add(override) else overrideRepository.update(override)
             }
             snackbar.value = if (scope == UpdateScope.ALL_WEEKS) "已应用到所有周" else "仅本周已修改"
@@ -158,10 +106,7 @@ class ScheduleViewModel(
 
     fun deleteCourse(baseCourseId: Long) {
         val base = templates.value.firstOrNull { it.id == baseCourseId } ?: return
-        viewModelScope.launch {
-            courseRepository.delete(base)
-            snackbar.value = "已删除课程"
-        }
+        viewModelScope.launch { courseRepository.delete(base); snackbar.value = "已删除课程" }
     }
 
     fun clearSnackbar() { snackbar.value = null }
@@ -173,6 +118,5 @@ class ScheduleVmFactory(
     private val semesterRepository: SemesterRepository,
     private val overrideRepository: CourseWeekOverrideRepository
 ) : ViewModelProvider.Factory {
-    override fun <T : ViewModel> create(modelClass: Class<T>): T =
-        ScheduleViewModel(courseRepository, reminderRepository, semesterRepository, overrideRepository) as T
+    override fun <T : ViewModel> create(modelClass: Class<T>): T = ScheduleViewModel(courseRepository, reminderRepository, semesterRepository, overrideRepository) as T
 }

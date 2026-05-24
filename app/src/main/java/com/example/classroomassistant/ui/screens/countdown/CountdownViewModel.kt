@@ -29,7 +29,10 @@ data class CountdownUiState(
     val vibrateSignal: Int = 0
 )
 
-class CountdownViewModel(private val reminderRepository: ReminderRepository) : ViewModel() {
+class CountdownViewModel(
+    private val appContext: Context,
+    private val reminderRepository: ReminderRepository
+) : ViewModel() {
     private val _uiState = MutableStateFlow(CountdownUiState())
     val uiState: StateFlow<CountdownUiState> = _uiState
 
@@ -56,22 +59,20 @@ class CountdownViewModel(private val reminderRepository: ReminderRepository) : V
             while (_uiState.value.running && _uiState.value.remainSec > 0) {
                 delay(1000)
                 val current = _uiState.value
-                val remain = if (endAtMillis > 0) {
-                    ((endAtMillis - System.currentTimeMillis()) / 1000L).toInt().coerceAtLeast(0)
-                } else {
-                    current.remainSec
-                }
+                val remain = if (endAtMillis > 0) ((endAtMillis - System.currentTimeMillis()) / 1000L).toInt().coerceAtLeast(0) else current.remainSec
                 val elapsedSec = (current.totalSec - remain).coerceAtLeast(0)
                 var next = current.copy(remainSec = remain)
 
                 current.rules.forEach { rule ->
                     if (!remindedIds.contains(rule.id) && elapsedSec >= rule.triggerAfterMinutes * 60) {
                         remindedIds.add(rule.id)
+                        vibrateNow()
                         next = next.copy(tip = rule.label, vibrateSignal = current.vibrateSignal + 1)
                     }
                 }
 
                 if (remain <= 0) {
+                    vibrateNow()
                     next = next.copy(running = false, tip = "下课时间到", vibrateSignal = next.vibrateSignal + 1)
                 }
                 _uiState.value = next
@@ -79,32 +80,17 @@ class CountdownViewModel(private val reminderRepository: ReminderRepository) : V
         }
     }
 
-    fun pause() {
-        pausedRemainSec = _uiState.value.remainSec
-        _uiState.value = _uiState.value.copy(running = false)
-        ticker?.cancel()
-    }
+    fun pause() { pausedRemainSec = _uiState.value.remainSec; _uiState.value = _uiState.value.copy(running = false); ticker?.cancel() }
+    fun resume() { if (_uiState.value.remainSec <= 0) return; endAtMillis = System.currentTimeMillis() + pausedRemainSec * 1000L; _uiState.value = _uiState.value.copy(running = true); runTicker() }
+    fun end() { ticker?.cancel(); endAtMillis = 0L; _uiState.value = _uiState.value.copy(running = false, remainSec = 0, tip = "课程已结束") }
 
-    fun resume() {
-        if (_uiState.value.remainSec <= 0) return
-        endAtMillis = System.currentTimeMillis() + pausedRemainSec * 1000L
-        _uiState.value = _uiState.value.copy(running = true)
-        runTicker()
-    }
-
-    fun end() {
-        ticker?.cancel()
-        endAtMillis = 0L
-        _uiState.value = _uiState.value.copy(running = false, remainSec = 0, tip = "课程已结束")
-    }
-
-    fun vibrate(context: Context) {
+    private fun vibrateNow() {
         val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            val vm = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
+            val vm = appContext.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
             vm.defaultVibrator
         } else {
             @Suppress("DEPRECATION")
-            context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
+            appContext.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
         }
         if (!vibrator.hasVibrator()) return
         val effect = VibrationEffect.createWaveform(longArrayOf(0, 700, 250, 700, 250, 700), -1)
@@ -117,6 +103,9 @@ class CountdownViewModel(private val reminderRepository: ReminderRepository) : V
     }
 }
 
-class CountdownVmFactory(private val reminderRepository: ReminderRepository) : ViewModelProvider.Factory {
-    override fun <T : ViewModel> create(modelClass: Class<T>): T = CountdownViewModel(reminderRepository) as T
+class CountdownVmFactory(
+    private val appContext: Context,
+    private val reminderRepository: ReminderRepository
+) : ViewModelProvider.Factory {
+    override fun <T : ViewModel> create(modelClass: Class<T>): T = CountdownViewModel(appContext, reminderRepository) as T
 }

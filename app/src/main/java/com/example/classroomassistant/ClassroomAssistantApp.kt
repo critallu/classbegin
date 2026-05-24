@@ -1,6 +1,7 @@
 ﻿package com.example.classroomassistant
 
 import android.app.Application
+import android.content.Context
 import com.example.classroomassistant.data.AppDatabase
 import com.example.classroomassistant.data.repository.CalendarRepository
 import com.example.classroomassistant.data.repository.CourseRepository
@@ -20,6 +21,7 @@ class ClassroomAssistantApp : Application() {
 }
 
 class AppContainer(application: Application) {
+    val appContext: Context = application.applicationContext
     private val db = AppDatabase.getInstance(application)
     val courseRepository = CourseRepository(db.courseDao())
     val reminderRepository = ReminderRepository(db.reminderDao())

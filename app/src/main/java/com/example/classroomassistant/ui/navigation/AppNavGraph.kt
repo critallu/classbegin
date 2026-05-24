@@ -48,7 +48,7 @@ fun AppNavGraph(container: AppContainer) {
     val homeVm: HomeViewModel = viewModel(
         factory = HomeVmFactory(container.courseRepository, container.calendarRepository, container.settingsRepository)
     )
-    val countdownVm: CountdownViewModel = viewModel(factory = CountdownVmFactory(container.reminderRepository))
+    val countdownVm: CountdownViewModel = viewModel(factory = CountdownVmFactory(container.appContext, container.reminderRepository))
     val calendarVm: CalendarViewModel = viewModel(factory = CalendarVmFactory(container.calendarRepository))
     val settingsVm: SettingsViewModel = viewModel(factory = SettingsVmFactory(container.settingsRepository))
 
@@ -120,3 +120,4 @@ fun AppNavGraph(container: AppContainer) {
         }
     }
 }
+
