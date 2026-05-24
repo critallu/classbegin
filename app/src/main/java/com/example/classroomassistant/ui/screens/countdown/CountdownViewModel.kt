@@ -2,6 +2,7 @@
 
 import android.content.Context
 import android.os.Build
+import android.os.VibrationAttributes
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
@@ -84,7 +85,14 @@ class CountdownViewModel(private val reminderRepository: ReminderRepository) : V
             @Suppress("DEPRECATION")
             context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
         }
-        vibrator.vibrate(VibrationEffect.createOneShot(400, VibrationEffect.DEFAULT_AMPLITUDE))
+        if (!vibrator.hasVibrator()) return
+        val effect = VibrationEffect.createWaveform(longArrayOf(0, 220, 120, 320), -1)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            val attrs = VibrationAttributes.createForUsage(VibrationAttributes.USAGE_ALARM)
+            vibrator.vibrate(effect, attrs)
+        } else {
+            vibrator.vibrate(effect)
+        }
     }
 }
 
