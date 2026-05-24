@@ -15,6 +15,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.delay
 import com.example.classroomassistant.ui.components.CountdownCircle
 import com.example.classroomassistant.ui.components.ReminderChip
 
@@ -22,10 +23,17 @@ import com.example.classroomassistant.ui.components.ReminderChip
 fun CountdownScreen(vm: CountdownViewModel, onFinish: () -> Unit) {
     val state by vm.uiState.collectAsState()
     val context = LocalContext.current
-    LaunchedEffect(state.tip) {
-        if (state.tip.isNotBlank()) vm.vibrate(context)
-        if (state.remainSec <= 0 && state.totalSec > 0) onFinish()
+
+    LaunchedEffect(state.vibrateSignal) {
+        if (state.vibrateSignal > 0) {
+            vm.vibrate(context)
+            if (state.remainSec <= 0 && state.totalSec > 0) {
+                delay(500)
+                onFinish()
+            }
+        }
     }
+
     val progress = if (state.totalSec == 0) 0f else state.remainSec.toFloat() / state.totalSec
     val min = state.remainSec / 60
     val sec = state.remainSec % 60
@@ -34,10 +42,11 @@ fun CountdownScreen(vm: CountdownViewModel, onFinish: () -> Unit) {
         Text("${state.course?.className ?: ""} · ${state.course?.classroom ?: ""}")
         CountdownCircle(progress, "%02d:%02d".format(min, sec))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            ReminderChip("20分钟")
-            ReminderChip("10分钟")
-            ReminderChip("5分钟")
-            ReminderChip("下课")
+            if (state.rules.isEmpty()) {
+                ReminderChip("暂无提醒")
+            } else {
+                state.rules.forEach { ReminderChip("${it.triggerAfterMinutes}分钟: ${it.label}") }
+            }
         }
         Text(state.tip)
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
