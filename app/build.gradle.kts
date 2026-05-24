@@ -1,7 +1,6 @@
 ﻿plugins {
     id("com.android.application")
-    id("org.jetbrains.kotlin.android")
-    id("com.google.devtools.ksp")
+    id("org.jetbrains.kotlin.android")`r`n    id("org.jetbrains.kotlin.plugin.compose")`r`n    id("com.google.devtools.ksp")
 }
 
 android {
@@ -35,10 +34,7 @@ android {
 
     kotlinOptions { jvmTarget = "17" }
 
-    buildFeatures { compose = true }
-
-    composeOptions { kotlinCompilerExtensionVersion = "1.5.15" }
-
+    buildFeatures { compose = true }`r`n
     packaging { resources { excludes += "/META-INF/{AL2.0,LGPL2.1}" } }
 }
 
@@ -73,3 +69,4 @@ dependencies {
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
 }
+
