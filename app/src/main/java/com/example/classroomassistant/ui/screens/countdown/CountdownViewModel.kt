@@ -32,15 +32,20 @@ data class CountdownUiState(
 class CountdownViewModel(private val reminderRepository: ReminderRepository) : ViewModel() {
     private val _uiState = MutableStateFlow(CountdownUiState())
     val uiState: StateFlow<CountdownUiState> = _uiState
+
     private var ticker: Job? = null
     private val remindedIds = mutableSetOf<Long>()
+    private var endAtMillis: Long = 0L
+    private var pausedRemainSec: Int = 0
 
     fun start(course: Course) {
         viewModelScope.launch {
             val rules = reminderRepository.observeByCourse(course.id).first().filter { it.enabled }
             val total = course.durationMinutes * 60
-            _uiState.value = CountdownUiState(course = course, totalSec = total, remainSec = total, running = true, rules = rules)
+            endAtMillis = System.currentTimeMillis() + total * 1000L
+            pausedRemainSec = total
             remindedIds.clear()
+            _uiState.value = CountdownUiState(course = course, totalSec = total, remainSec = total, running = true, rules = rules)
             runTicker()
         }
     }
@@ -51,9 +56,13 @@ class CountdownViewModel(private val reminderRepository: ReminderRepository) : V
             while (_uiState.value.running && _uiState.value.remainSec > 0) {
                 delay(1000)
                 val current = _uiState.value
-                val newSec = current.remainSec - 1
-                val elapsedSec = current.totalSec - newSec
-                var next = current.copy(remainSec = newSec)
+                val remain = if (endAtMillis > 0) {
+                    ((endAtMillis - System.currentTimeMillis()) / 1000L).toInt().coerceAtLeast(0)
+                } else {
+                    current.remainSec
+                }
+                val elapsedSec = (current.totalSec - remain).coerceAtLeast(0)
+                var next = current.copy(remainSec = remain)
 
                 current.rules.forEach { rule ->
                     if (!remindedIds.contains(rule.id) && elapsedSec >= rule.triggerAfterMinutes * 60) {
@@ -62,7 +71,7 @@ class CountdownViewModel(private val reminderRepository: ReminderRepository) : V
                     }
                 }
 
-                if (newSec <= 0) {
+                if (remain <= 0) {
                     next = next.copy(running = false, tip = "下课时间到", vibrateSignal = next.vibrateSignal + 1)
                 }
                 _uiState.value = next
@@ -70,9 +79,24 @@ class CountdownViewModel(private val reminderRepository: ReminderRepository) : V
         }
     }
 
-    fun pause() { _uiState.value = _uiState.value.copy(running = false); ticker?.cancel() }
-    fun resume() { _uiState.value = _uiState.value.copy(running = true); runTicker() }
-    fun end() { ticker?.cancel(); _uiState.value = _uiState.value.copy(running = false, remainSec = 0, tip = "课程已结束") }
+    fun pause() {
+        pausedRemainSec = _uiState.value.remainSec
+        _uiState.value = _uiState.value.copy(running = false)
+        ticker?.cancel()
+    }
+
+    fun resume() {
+        if (_uiState.value.remainSec <= 0) return
+        endAtMillis = System.currentTimeMillis() + pausedRemainSec * 1000L
+        _uiState.value = _uiState.value.copy(running = true)
+        runTicker()
+    }
+
+    fun end() {
+        ticker?.cancel()
+        endAtMillis = 0L
+        _uiState.value = _uiState.value.copy(running = false, remainSec = 0, tip = "课程已结束")
+    }
 
     fun vibrate(context: Context) {
         val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -83,8 +107,6 @@ class CountdownViewModel(private val reminderRepository: ReminderRepository) : V
             context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
         }
         if (!vibrator.hasVibrator()) return
-
-        // long vibration, 3 times: vibrate 700ms + pause 250ms, repeat 3 pulses
         val effect = VibrationEffect.createWaveform(longArrayOf(0, 700, 250, 700, 250, 700), -1)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             val attrs = VibrationAttributes.createForUsage(VibrationAttributes.USAGE_ALARM)

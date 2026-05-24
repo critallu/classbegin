@@ -4,7 +4,9 @@ import android.app.Application
 import com.example.classroomassistant.data.AppDatabase
 import com.example.classroomassistant.data.repository.CalendarRepository
 import com.example.classroomassistant.data.repository.CourseRepository
+import com.example.classroomassistant.data.repository.CourseWeekOverrideRepository
 import com.example.classroomassistant.data.repository.ReminderRepository
+import com.example.classroomassistant.data.repository.SemesterRepository
 import com.example.classroomassistant.data.repository.SettingsRepository
 
 class ClassroomAssistantApp : Application() {
@@ -23,4 +25,6 @@ class AppContainer(application: Application) {
     val reminderRepository = ReminderRepository(db.reminderDao())
     val calendarRepository = CalendarRepository(db.calendarEventDao())
     val settingsRepository = SettingsRepository(db.settingsDao())
+    val semesterRepository = SemesterRepository(db.semesterDao())
+    val courseWeekOverrideRepository = CourseWeekOverrideRepository(db.courseWeekOverrideDao())
 }

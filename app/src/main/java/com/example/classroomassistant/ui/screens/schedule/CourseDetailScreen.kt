@@ -18,51 +18,49 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.example.classroomassistant.data.entity.Course
 import com.example.classroomassistant.data.entity.ReminderRule
 import com.example.classroomassistant.ui.components.PrimaryButton
 
 @Composable
-fun CourseDetailScreen(
-    course: Course?,
-    vm: ScheduleViewModel,
-    onStart: () -> Unit,
-    onBack: () -> Unit,
-    onEditCourse: (Long) -> Unit
-) {
+fun CourseDetailScreen(course: ScheduledCourse?, vm: ScheduleViewModel, onStart: () -> Unit, onBack: () -> Unit) {
     var showDeleteCourseConfirm by remember { mutableStateOf(false) }
     var editingReminder by remember { mutableStateOf<ReminderRule?>(null) }
+    var showScopeDialog by remember { mutableStateOf(false) }
+
+    var editName by remember(course?.baseCourseId) { mutableStateOf(course?.name ?: "") }
+    var editWeekday by remember(course?.baseCourseId) { mutableStateOf((course?.weekday ?: 1).toString()) }
+    var editStartTime by remember(course?.baseCourseId) { mutableStateOf(course?.startTime ?: "") }
+    var editDuration by remember(course?.baseCourseId) { mutableStateOf((course?.durationMinutes ?: 40).toString()) }
+    var editClassroom by remember(course?.baseCourseId) { mutableStateOf(course?.classroom ?: "") }
+    var editClassName by remember(course?.baseCourseId) { mutableStateOf(course?.className ?: "") }
+
     val reminderLabel = remember { mutableStateOf("") }
     val reminderMinutes = remember { mutableStateOf("5") }
 
     if (course == null) return
-    val reminders by vm.observeReminders(course.id).collectAsState()
+    val reminders by vm.observeReminders(course.baseCourseId).collectAsState()
 
     Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text(course.name)
-        Text("班级: ${course.className}")
-        Text("时间: 周${course.weekday} ${course.startTime}")
-        Text("地点: ${course.classroom}")
-        Text("时长: ${course.durationMinutes}分钟")
-        Text("备注: ${course.note}")
+        Text("编辑本课")
+        OutlinedTextField(editName, { editName = it }, label = { Text("课程名") }, modifier = Modifier.fillMaxWidth())
+        OutlinedTextField(editClassName, { editClassName = it }, label = { Text("班级") }, modifier = Modifier.fillMaxWidth())
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+            OutlinedTextField(editWeekday, { editWeekday = it }, label = { Text("星期") }, modifier = Modifier.weight(1f))
+            OutlinedTextField(editStartTime, { editStartTime = it }, label = { Text("第几节/时间") }, modifier = Modifier.weight(1f))
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+            OutlinedTextField(editDuration, { editDuration = it }, label = { Text("时长") }, modifier = Modifier.weight(1f))
+            OutlinedTextField(editClassroom, { editClassroom = it }, label = { Text("教室") }, modifier = Modifier.weight(1f))
+        }
+
         PrimaryButton("开始上课", onStart)
-        PrimaryButton("编辑课程") { onEditCourse(course.id) }
+        PrimaryButton("保存课程修改") { showScopeDialog = true }
 
         Text("倒计时提醒")
-        OutlinedTextField(
-            value = reminderLabel.value,
-            onValueChange = { reminderLabel.value = it },
-            label = { Text("提醒内容") },
-            modifier = Modifier.fillMaxWidth()
-        )
-        OutlinedTextField(
-            value = reminderMinutes.value,
-            onValueChange = { reminderMinutes.value = it },
-            label = { Text("开课后几分钟") },
-            modifier = Modifier.fillMaxWidth()
-        )
+        OutlinedTextField(reminderLabel.value, { reminderLabel.value = it }, label = { Text("提醒内容") }, modifier = Modifier.fillMaxWidth())
+        OutlinedTextField(reminderMinutes.value, { reminderMinutes.value = it }, label = { Text("开课后几分钟") }, modifier = Modifier.fillMaxWidth())
         PrimaryButton("添加提醒") {
-            vm.addReminder(course.id, reminderLabel.value, reminderMinutes.value.toIntOrNull() ?: -1)
+            vm.addReminder(course.baseCourseId, reminderLabel.value, reminderMinutes.value.toIntOrNull() ?: -1)
             reminderLabel.value = ""
         }
 
@@ -77,6 +75,46 @@ fun CourseDetailScreen(
         }
 
         PrimaryButton("删除课程") { showDeleteCourseConfirm = true }
+    }
+
+    if (showScopeDialog) {
+        AlertDialog(
+            onDismissRequest = { showScopeDialog = false },
+            title = { Text("应用范围") },
+            text = { Text("这次修改只应用本周，还是应用到所有周？") },
+            confirmButton = {
+                TextButton(onClick = {
+                    vm.updateScheduledCourse(
+                        edited = course.copy(
+                            name = editName,
+                            weekday = editWeekday.toIntOrNull() ?: course.weekday,
+                            startTime = editStartTime,
+                            durationMinutes = editDuration.toIntOrNull() ?: course.durationMinutes,
+                            classroom = editClassroom,
+                            className = editClassName
+                        ),
+                        scope = UpdateScope.ALL_WEEKS,
+                        onDone = { showScopeDialog = false }
+                    )
+                }) { Text("应用到所有周") }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    vm.updateScheduledCourse(
+                        edited = course.copy(
+                            name = editName,
+                            weekday = editWeekday.toIntOrNull() ?: course.weekday,
+                            startTime = editStartTime,
+                            durationMinutes = editDuration.toIntOrNull() ?: course.durationMinutes,
+                            classroom = editClassroom,
+                            className = editClassName
+                        ),
+                        scope = UpdateScope.CURRENT_WEEK,
+                        onDone = { showScopeDialog = false }
+                    )
+                }) { Text("只改本周") }
+            }
+        )
     }
 
     if (editingReminder != null) {
@@ -107,7 +145,7 @@ fun CourseDetailScreen(
             onDismissRequest = { showDeleteCourseConfirm = false },
             confirmButton = {
                 TextButton(onClick = {
-                    vm.deleteCourse(course)
+                    vm.deleteCourse(course.baseCourseId)
                     showDeleteCourseConfirm = false
                     onBack()
                 }) { Text("确认删除") }

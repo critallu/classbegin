@@ -14,6 +14,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.example.classroomassistant.AppContainer
+import com.example.classroomassistant.data.entity.Course
 import com.example.classroomassistant.ui.screens.calendar.CalendarScreen
 import com.example.classroomassistant.ui.screens.calendar.CalendarViewModel
 import com.example.classroomassistant.ui.screens.calendar.CalendarVmFactory
@@ -37,7 +38,12 @@ import com.example.classroomassistant.ui.screens.settings.SettingsVmFactory
 fun AppNavGraph(container: AppContainer) {
     val nav = rememberNavController()
     val scheduleVm: ScheduleViewModel = viewModel(
-        factory = ScheduleVmFactory(container.courseRepository, container.reminderRepository)
+        factory = ScheduleVmFactory(
+            container.courseRepository,
+            container.reminderRepository,
+            container.semesterRepository,
+            container.courseWeekOverrideRepository
+        )
     )
     val homeVm: HomeViewModel = viewModel(
         factory = HomeVmFactory(container.courseRepository, container.calendarRepository, container.settingsRepository)
@@ -62,28 +68,49 @@ fun AppNavGraph(container: AppContainer) {
                 ScheduleScreen(scheduleVm, onAdd = { nav.navigate("course_edit/0") }, onDetail = { nav.navigate("course_detail/$it") })
             }
             composable(NavRoute.Countdown.route) {
-                val first = remember(scheduleVm.courses.value) { scheduleVm.courses.value.firstOrNull() }
-                if (first != null && countdownVm.uiState.value.course == null) countdownVm.start(first)
+                val first = remember(scheduleVm.scheduledCourses.value) { scheduleVm.scheduledCourses.value.firstOrNull() }
+                if (first != null && countdownVm.uiState.value.course == null) {
+                    countdownVm.start(
+                        Course(
+                            id = first.baseCourseId,
+                            name = first.name,
+                            weekday = first.weekday,
+                            startTime = first.startTime,
+                            durationMinutes = first.durationMinutes,
+                            classroom = first.classroom,
+                            className = first.className,
+                            note = first.note,
+                            color = first.color
+                        )
+                    )
+                }
                 CountdownScreen(countdownVm) { nav.navigate(NavRoute.Home.route) }
             }
-            composable(NavRoute.Calendar.route) {
-                CalendarScreen(calendarVm, onAdd = { nav.navigate("event_edit/$it") })
-            }
+            composable(NavRoute.Calendar.route) { CalendarScreen(calendarVm, onAdd = { nav.navigate("event_edit/$it") }) }
             composable(NavRoute.Settings.route) { SettingsScreen(settingsVm) }
             composable("course_edit/{id}", arguments = listOf(navArgument("id") { type = NavType.LongType })) { back ->
                 val id = back.arguments?.getLong("id") ?: 0L
-                val existing = scheduleVm.courses.value.firstOrNull { it.id == id }
-                CourseEditScreen(existing, scheduleVm) { nav.popBackStack() }
+                val existing = scheduleVm.scheduledCourses.value.firstOrNull { it.baseCourseId == id }
+                val c = existing?.let {
+                    Course(it.baseCourseId, it.name, it.weekday, it.startTime, it.durationMinutes, it.classroom, it.className, it.note, it.color)
+                }
+                CourseEditScreen(c, scheduleVm) { nav.popBackStack() }
             }
             composable("course_detail/{id}", arguments = listOf(navArgument("id") { type = NavType.LongType })) { back ->
                 val id = back.arguments?.getLong("id") ?: 0L
-                val course = scheduleVm.courses.value.firstOrNull { it.id == id }
+                val course = scheduleVm.scheduledCourses.value.firstOrNull { it.baseCourseId == id }
                 CourseDetailScreen(
                     course,
                     scheduleVm,
-                    onStart = { course?.let { countdownVm.start(it) }; nav.navigate(NavRoute.Countdown.route) },
-                    onBack = { nav.popBackStack() },
-                    onEditCourse = { nav.navigate("course_edit/$it") }
+                    onStart = {
+                        course?.let {
+                            countdownVm.start(
+                                Course(it.baseCourseId, it.name, it.weekday, it.startTime, it.durationMinutes, it.classroom, it.className, it.note, it.color)
+                            )
+                        }
+                        nav.navigate(NavRoute.Countdown.route)
+                    },
+                    onBack = { nav.popBackStack() }
                 )
             }
             composable("event_edit/{date}", arguments = listOf(navArgument("date") { type = NavType.StringType })) { back ->

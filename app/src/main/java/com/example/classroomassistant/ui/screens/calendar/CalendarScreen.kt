@@ -35,7 +35,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.classroomassistant.data.entity.CalendarEvent
 import com.example.classroomassistant.ui.components.EmptyState
-import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.YearMonth
 import java.time.temporal.WeekFields
@@ -62,10 +61,13 @@ fun CalendarScreen(vm: CalendarViewModel, onAdd: (String) -> Unit) {
                 Tab(selected = viewMode == 3, onClick = { viewMode = 3 }, text = { Text("日") })
             }
 
-            if (viewMode == 1) {
-                MonthGrid(selected, events, onDateClick = { vm.selectedDate.value = it.toString() })
-            } else {
-                DateSelector(selected = selectedDate, onDateClick = { vm.selectedDate.value = it })
+            when (viewMode) {
+                0 -> YearSummary(selected.year, events) { month ->
+                    vm.selectedDate.value = LocalDate.of(selected.year, month, 1).toString()
+                }
+                1 -> MonthGrid(selected, events, onDateClick = { vm.selectedDate.value = it.toString() })
+                2 -> WeekStrip(selected, events, onDateClick = { vm.selectedDate.value = it.toString() })
+                else -> DayHeader(selected)
             }
 
             if (visibleEvents.isEmpty()) {
@@ -80,10 +82,35 @@ fun CalendarScreen(vm: CalendarViewModel, onAdd: (String) -> Unit) {
 }
 
 @Composable
+private fun YearSummary(year: Int, events: List<CalendarEvent>, onMonthClick: (Int) -> Unit) {
+    val counts = events.map { LocalDate.parse(it.date) }.filter { it.year == year }.groupingBy { it.monthValue }.eachCount()
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text("$year 年", fontWeight = FontWeight.SemiBold)
+        repeat(4) { row ->
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                repeat(3) { col ->
+                    val month = row * 3 + col + 1
+                    val count = counts[month] ?: 0
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(10.dp))
+                            .clickable { onMonthClick(month) }
+                            .padding(10.dp)
+                    ) {
+                        Text("${month}月  ${count}项")
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
 private fun MonthGrid(selected: LocalDate, events: List<CalendarEvent>, onDateClick: (LocalDate) -> Unit) {
     val ym = YearMonth.from(selected)
     val first = ym.atDay(1)
-    val startOffset = (first.dayOfWeek.value % 7) // Sunday=0
+    val startOffset = (first.dayOfWeek.value % 7)
     val startDate = first.minusDays(startOffset.toLong())
     val today = LocalDate.now()
     val eventDates = events.map { LocalDate.parse(it.date) }.toSet()
@@ -111,18 +138,9 @@ private fun MonthGrid(selected: LocalDate, events: List<CalendarEvent>, onDateCl
                             .clickable { onDateClick(d) }
                             .padding(4.dp)
                     ) {
-                        Text(
-                            d.dayOfMonth.toString(),
-                            color = if (inMonth) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f),
-                            modifier = Modifier.align(Alignment.TopStart)
-                        )
+                        Text(d.dayOfMonth.toString(), color = if (inMonth) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f), modifier = Modifier.align(Alignment.TopStart))
                         if (eventDates.contains(d)) {
-                            Box(
-                                modifier = Modifier
-                                    .size(6.dp)
-                                    .background(MaterialTheme.colorScheme.primary, CircleShape)
-                                    .align(Alignment.BottomCenter)
-                            )
+                            Box(modifier = Modifier.size(6.dp).background(MaterialTheme.colorScheme.primary, CircleShape).align(Alignment.BottomCenter))
                         }
                     }
                 }
@@ -132,29 +150,36 @@ private fun MonthGrid(selected: LocalDate, events: List<CalendarEvent>, onDateCl
 }
 
 @Composable
-private fun DateSelector(selected: String, onDateClick: (String) -> Unit) {
-    val base = LocalDate.parse(selected)
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-        (-3..3).forEach { offset ->
-            val d = base.plusDays(offset.toLong())
-            Text(
-                text = d.dayOfMonth.toString(),
+private fun WeekStrip(selected: LocalDate, events: List<CalendarEvent>, onDateClick: (LocalDate) -> Unit) {
+    val start = selected.minusDays((selected.dayOfWeek.value % 7).toLong())
+    val eventDates = events.map { LocalDate.parse(it.date) }.toSet()
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        repeat(7) { i ->
+            val d = start.plusDays(i.toLong())
+            Column(
                 modifier = Modifier
                     .weight(1f)
-                    .background(if (d.toString() == selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface, RoundedCornerShape(10.dp))
-                    .padding(8.dp)
-                    .clickable { onDateClick(d.toString()) }
-            )
+                    .background(if (d == selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface, RoundedCornerShape(10.dp))
+                    .clickable { onDateClick(d) }
+                    .padding(8.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(listOf("日", "一", "二", "三", "四", "五", "六")[i])
+                Text(d.dayOfMonth.toString(), fontWeight = FontWeight.SemiBold)
+                if (eventDates.contains(d)) Box(Modifier.size(6.dp).background(MaterialTheme.colorScheme.primary, CircleShape))
+            }
         }
     }
 }
 
 @Composable
+private fun DayHeader(selected: LocalDate) {
+    Text("${selected} · 日视图", fontWeight = FontWeight.SemiBold)
+}
+
+@Composable
 private fun EventRow(e: CalendarEvent) {
-    Text(
-        "${e.date} ${e.time} ${if (e.important) "[重要] " else ""}${e.title}",
-        modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface, RoundedCornerShape(14.dp)).padding(12.dp)
-    )
+    Text("${e.time} ${if (e.important) "[重要] " else ""}${e.title}", modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface, RoundedCornerShape(14.dp)).padding(12.dp))
 }
 
 private fun filterEventsByMode(events: List<CalendarEvent>, selected: LocalDate, mode: Int): List<CalendarEvent> {

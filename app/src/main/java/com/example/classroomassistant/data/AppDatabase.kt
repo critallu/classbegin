@@ -6,16 +6,27 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import com.example.classroomassistant.data.dao.CalendarEventDao
 import com.example.classroomassistant.data.dao.CourseDao
+import com.example.classroomassistant.data.dao.CourseWeekOverrideDao
 import com.example.classroomassistant.data.dao.ReminderDao
+import com.example.classroomassistant.data.dao.SemesterDao
 import com.example.classroomassistant.data.dao.SettingsDao
 import com.example.classroomassistant.data.entity.AppSettings
 import com.example.classroomassistant.data.entity.CalendarEvent
 import com.example.classroomassistant.data.entity.Course
+import com.example.classroomassistant.data.entity.CourseWeekOverride
 import com.example.classroomassistant.data.entity.ReminderRule
+import com.example.classroomassistant.data.entity.SemesterConfig
 
 @Database(
-    entities = [Course::class, ReminderRule::class, CalendarEvent::class, AppSettings::class],
-    version = 1,
+    entities = [
+        Course::class,
+        ReminderRule::class,
+        CalendarEvent::class,
+        AppSettings::class,
+        SemesterConfig::class,
+        CourseWeekOverride::class
+    ],
+    version = 2,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -23,6 +34,8 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun reminderDao(): ReminderDao
     abstract fun calendarEventDao(): CalendarEventDao
     abstract fun settingsDao(): SettingsDao
+    abstract fun semesterDao(): SemesterDao
+    abstract fun courseWeekOverrideDao(): CourseWeekOverrideDao
 
     companion object {
         @Volatile private var INSTANCE: AppDatabase? = null
@@ -32,7 +45,10 @@ abstract class AppDatabase : RoomDatabase() {
                 context.applicationContext,
                 AppDatabase::class.java,
                 "classroom_assistant.db"
-            ).build().also { INSTANCE = it }
+            )
+                .fallbackToDestructiveMigration()
+                .build()
+                .also { INSTANCE = it }
         }
     }
 }
