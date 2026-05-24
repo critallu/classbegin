@@ -1,0 +1,74 @@
+﻿package com.example.classroomassistant.ui.navigation
+
+import androidx.compose.foundation.layout.padding
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Modifier
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavType
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
+import com.example.classroomassistant.AppContainer
+import com.example.classroomassistant.ui.screens.calendar.CalendarScreen
+import com.example.classroomassistant.ui.screens.calendar.CalendarViewModel
+import com.example.classroomassistant.ui.screens.calendar.CalendarVmFactory
+import com.example.classroomassistant.ui.screens.calendar.EventEditScreen
+import com.example.classroomassistant.ui.screens.countdown.CountdownScreen
+import com.example.classroomassistant.ui.screens.countdown.CountdownViewModel
+import com.example.classroomassistant.ui.screens.countdown.CountdownVmFactory
+import com.example.classroomassistant.ui.screens.home.HomeScreen
+import com.example.classroomassistant.ui.screens.home.HomeViewModel
+import com.example.classroomassistant.ui.screens.home.HomeVmFactory
+import com.example.classroomassistant.ui.screens.schedule.CourseDetailScreen
+import com.example.classroomassistant.ui.screens.schedule.CourseEditScreen
+import com.example.classroomassistant.ui.screens.schedule.ScheduleScreen
+import com.example.classroomassistant.ui.screens.schedule.ScheduleViewModel
+import com.example.classroomassistant.ui.screens.schedule.ScheduleVmFactory
+import com.example.classroomassistant.ui.screens.settings.SettingsScreen
+import com.example.classroomassistant.ui.screens.settings.SettingsViewModel
+import com.example.classroomassistant.ui.screens.settings.SettingsVmFactory
+import androidx.compose.material3.Scaffold
+
+@Composable
+fun AppNavGraph(container: AppContainer) {
+    val nav = rememberNavController()
+    val scheduleVm: ScheduleViewModel = viewModel(factory = ScheduleVmFactory(container.courseRepository))
+    val homeVm: HomeViewModel = viewModel(factory = HomeVmFactory(container.courseRepository, container.calendarRepository, container.settingsRepository))
+    val countdownVm: CountdownViewModel = viewModel(factory = CountdownVmFactory())
+    val calendarVm: CalendarViewModel = viewModel(factory = CalendarVmFactory(container.calendarRepository))
+    val settingsVm: SettingsViewModel = viewModel(factory = SettingsVmFactory(container.settingsRepository))
+
+    val entry by nav.currentBackStackEntryAsState()
+    val current = entry?.destination?.route ?: NavRoute.Home.route
+
+    Scaffold(bottomBar = {
+        if (!current.contains("edit") && !current.contains("detail")) {
+            BottomNavBar(current) { route -> nav.navigate(route) }
+        }
+    }) { padding ->
+        NavHost(nav, startDestination = NavRoute.Home.route, modifier = Modifier.padding(padding)) {
+            composable(NavRoute.Home.route) {
+                HomeScreen(homeVm, onGoCountdown = { nav.navigate(NavRoute.Countdown.route) }, onCourseClick = { nav.navigate("course_detail/$it") })
+            }
+            composable(NavRoute.Schedule.route) { ScheduleScreen(scheduleVm, onAdd = { nav.navigate(NavRoute.CourseEdit.route) }, onDetail = { nav.navigate("course_detail/$it") }) }
+            composable(NavRoute.Countdown.route) {
+                val first = remember(scheduleVm.courses.value) { scheduleVm.courses.value.firstOrNull() }
+                if (first != null && countdownVm.uiState.value.course == null) countdownVm.start(first)
+                CountdownScreen(countdownVm) { nav.navigate(NavRoute.Home.route) }
+            }
+            composable(NavRoute.Calendar.route) { CalendarScreen(calendarVm, onAdd = { nav.navigate(NavRoute.EventEdit.route) }) }
+            composable(NavRoute.Settings.route) { SettingsScreen(settingsVm) }
+            composable(NavRoute.CourseEdit.route) { CourseEditScreen(scheduleVm) { nav.popBackStack() } }
+            composable("course_detail/{id}", arguments = listOf(navArgument("id") { type = NavType.LongType })) { back ->
+                val id = back.arguments?.getLong("id") ?: 0L
+                val course = scheduleVm.courses.value.firstOrNull { it.id == id }
+                CourseDetailScreen(course, scheduleVm, onStart = { course?.let { countdownVm.start(it) }; nav.navigate(NavRoute.Countdown.route) }, onBack = { nav.popBackStack() })
+            }
+            composable(NavRoute.EventEdit.route) { EventEditScreen(calendarVm) { nav.popBackStack() } }
+        }
+    }
+}
