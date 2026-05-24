@@ -19,7 +19,7 @@ import androidx.room.PrimaryKey
 data class ReminderRule(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val courseId: Long,
-    val minutesBeforeEnd: Int,
+    val triggerAfterMinutes: Int,
     val label: String,
     val enabled: Boolean = true
 )

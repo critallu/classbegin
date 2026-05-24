@@ -1,18 +1,21 @@
 ﻿package com.example.classroomassistant.ui.screens.countdown
 
+import android.content.Context
 import android.os.Build
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
-import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.example.classroomassistant.data.entity.Course
+import com.example.classroomassistant.data.entity.ReminderRule
+import com.example.classroomassistant.data.repository.ReminderRepository
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 data class CountdownUiState(
@@ -20,20 +23,25 @@ data class CountdownUiState(
     val totalSec: Int = 0,
     val remainSec: Int = 0,
     val running: Boolean = false,
-    val tip: String = ""
+    val tip: String = "",
+    val rules: List<ReminderRule> = emptyList(),
+    val vibrateSignal: Int = 0
 )
 
-class CountdownViewModel : ViewModel() {
+class CountdownViewModel(private val reminderRepository: ReminderRepository) : ViewModel() {
     private val _uiState = MutableStateFlow(CountdownUiState())
     val uiState: StateFlow<CountdownUiState> = _uiState
     private var ticker: Job? = null
-    private val reminded = mutableSetOf<Int>()
+    private val remindedIds = mutableSetOf<Long>()
 
     fun start(course: Course) {
-        val total = course.durationMinutes * 60
-        _uiState.value = CountdownUiState(course, total, total, true)
-        reminded.clear()
-        runTicker()
+        viewModelScope.launch {
+            val rules = reminderRepository.observeByCourse(course.id).first().filter { it.enabled }
+            val total = course.durationMinutes * 60
+            _uiState.value = CountdownUiState(course = course, totalSec = total, remainSec = total, running = true, rules = rules)
+            remindedIds.clear()
+            runTicker()
+        }
     }
 
     private fun runTicker() {
@@ -41,16 +49,26 @@ class CountdownViewModel : ViewModel() {
         ticker = viewModelScope.launch {
             while (_uiState.value.running && _uiState.value.remainSec > 0) {
                 delay(1000)
-                val newSec = _uiState.value.remainSec - 1
-                _uiState.value = _uiState.value.copy(remainSec = newSec)
-                val m = newSec / 60
-                listOf(20, 10, 5, 0).forEach {
-                    if (m == it && reminded.add(it)) {
-                        _uiState.value = _uiState.value.copy(tip = if (it == 0) "下课时间到" else "距离下课还有${it}分钟")
+                val current = _uiState.value
+                val newSec = current.remainSec - 1
+                val elapsedSec = current.totalSec - newSec
+                var next = current.copy(remainSec = newSec)
+
+                current.rules.forEach { rule ->
+                    if (!remindedIds.contains(rule.id) && elapsedSec >= rule.triggerAfterMinutes * 60) {
+                        remindedIds.add(rule.id)
+                        next = next.copy(
+                            tip = rule.label,
+                            vibrateSignal = current.vibrateSignal + 1
+                        )
                     }
                 }
+
+                if (newSec <= 0) {
+                    next = next.copy(running = false, tip = "下课时间到", vibrateSignal = next.vibrateSignal + 1)
+                }
+                _uiState.value = next
             }
-            if (_uiState.value.remainSec <= 0) _uiState.value = _uiState.value.copy(running = false)
         }
     }
 
@@ -70,6 +88,6 @@ class CountdownViewModel : ViewModel() {
     }
 }
 
-class CountdownVmFactory : ViewModelProvider.Factory {
-    override fun <T : ViewModel> create(modelClass: Class<T>): T = CountdownViewModel() as T
+class CountdownVmFactory(private val reminderRepository: ReminderRepository) : ViewModelProvider.Factory {
+    override fun <T : ViewModel> create(modelClass: Class<T>): T = CountdownViewModel(reminderRepository) as T
 }

@@ -9,7 +9,7 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface ReminderDao {
-    @Query("SELECT * FROM ReminderRule WHERE courseId = :courseId ORDER BY minutesBeforeEnd DESC")
+    @Query("SELECT * FROM ReminderRule WHERE courseId = :courseId ORDER BY triggerAfterMinutes ASC")
     fun observeByCourse(courseId: Long): Flow<List<ReminderRule>>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)

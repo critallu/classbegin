@@ -1,6 +1,7 @@
 ﻿package com.example.classroomassistant.ui.navigation
 
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -31,14 +32,17 @@ import com.example.classroomassistant.ui.screens.schedule.ScheduleVmFactory
 import com.example.classroomassistant.ui.screens.settings.SettingsScreen
 import com.example.classroomassistant.ui.screens.settings.SettingsViewModel
 import com.example.classroomassistant.ui.screens.settings.SettingsVmFactory
-import androidx.compose.material3.Scaffold
 
 @Composable
 fun AppNavGraph(container: AppContainer) {
     val nav = rememberNavController()
-    val scheduleVm: ScheduleViewModel = viewModel(factory = ScheduleVmFactory(container.courseRepository))
-    val homeVm: HomeViewModel = viewModel(factory = HomeVmFactory(container.courseRepository, container.calendarRepository, container.settingsRepository))
-    val countdownVm: CountdownViewModel = viewModel(factory = CountdownVmFactory())
+    val scheduleVm: ScheduleViewModel = viewModel(
+        factory = ScheduleVmFactory(container.courseRepository, container.reminderRepository)
+    )
+    val homeVm: HomeViewModel = viewModel(
+        factory = HomeVmFactory(container.courseRepository, container.calendarRepository, container.settingsRepository)
+    )
+    val countdownVm: CountdownViewModel = viewModel(factory = CountdownVmFactory(container.reminderRepository))
     val calendarVm: CalendarViewModel = viewModel(factory = CalendarVmFactory(container.calendarRepository))
     val settingsVm: SettingsViewModel = viewModel(factory = SettingsVmFactory(container.settingsRepository))
 
@@ -54,7 +58,9 @@ fun AppNavGraph(container: AppContainer) {
             composable(NavRoute.Home.route) {
                 HomeScreen(homeVm, onGoCountdown = { nav.navigate(NavRoute.Countdown.route) }, onCourseClick = { nav.navigate("course_detail/$it") })
             }
-            composable(NavRoute.Schedule.route) { ScheduleScreen(scheduleVm, onAdd = { nav.navigate(NavRoute.CourseEdit.route) }, onDetail = { nav.navigate("course_detail/$it") }) }
+            composable(NavRoute.Schedule.route) {
+                ScheduleScreen(scheduleVm, onAdd = { nav.navigate(NavRoute.CourseEdit.route) }, onDetail = { nav.navigate("course_detail/$it") })
+            }
             composable(NavRoute.Countdown.route) {
                 val first = remember(scheduleVm.courses.value) { scheduleVm.courses.value.firstOrNull() }
                 if (first != null && countdownVm.uiState.value.course == null) countdownVm.start(first)
@@ -66,7 +72,12 @@ fun AppNavGraph(container: AppContainer) {
             composable("course_detail/{id}", arguments = listOf(navArgument("id") { type = NavType.LongType })) { back ->
                 val id = back.arguments?.getLong("id") ?: 0L
                 val course = scheduleVm.courses.value.firstOrNull { it.id == id }
-                CourseDetailScreen(course, scheduleVm, onStart = { course?.let { countdownVm.start(it) }; nav.navigate(NavRoute.Countdown.route) }, onBack = { nav.popBackStack() })
+                CourseDetailScreen(
+                    course,
+                    scheduleVm,
+                    onStart = { course?.let { countdownVm.start(it) }; nav.navigate(NavRoute.Countdown.route) },
+                    onBack = { nav.popBackStack() }
+                )
             }
             composable(NavRoute.EventEdit.route) { EventEditScreen(calendarVm) { nav.popBackStack() } }
         }
